@@ -30,22 +30,6 @@ SchoolBus_Assignment/
     └── main.js             # Application entry point
 ```
 
-
-
-    addVehicleMarker(startPoint) { /* ... */ }
-    updateVehiclePosition(lat, lng) { /* ... */ }
-}
-```
-
-
-
-
-
-
-```
-
-
-
 ## 🚀 **Usage**
 
 ### **Local Development**
