@@ -93,14 +93,17 @@ class MapManager {
         try {
             const vehicleIcon = this.createVehicleIcon();
             
-            // Ensure the vehicle starts exactly on the route
-            const exactPosition = this.getExactRoutePosition(startPoint.latitude, startPoint.longitude);
+            // Use the first route coordinate to ensure perfect alignment
+            let startPosition = [startPoint.latitude, startPoint.longitude];
+            if (this.routeCoordinates && this.routeCoordinates.length > 0) {
+                startPosition = this.routeCoordinates[0];
+            }
             
-            this.vehicleMarker = L.marker(exactPosition, {
+            this.vehicleMarker = L.marker(startPosition, {
                 icon: vehicleIcon
             }).addTo(this.map);
 
-            Utils.log('Vehicle marker created at:', exactPosition);
+            Utils.log('Vehicle marker created at:', startPosition);
             Utils.log('Marker added to map:', this.map.hasLayer(this.vehicleMarker));
             
             // Add popup to vehicle marker
@@ -169,18 +172,15 @@ class MapManager {
      */
     updateVehiclePosition(latitude, longitude) {
         if (this.vehicleMarker) {
-            // Ensure coordinates are exactly on the route
-            const exactPosition = this.getExactRoutePosition(latitude, longitude);
-            
             // Update vehicle marker position with smooth animation
-            this.vehicleMarker.setLatLng(exactPosition, {
+            this.vehicleMarker.setLatLng([latitude, longitude], {
                 animate: true,
                 duration: 0.5
             });
             
             // Also update fallback marker if it exists
             if (this.fallbackMarker) {
-                this.fallbackMarker.setLatLng(exactPosition);
+                this.fallbackMarker.setLatLng([latitude, longitude]);
             }
         }
     }
@@ -256,7 +256,17 @@ class MapManager {
         }
     }
 
-    
+    /**
+     * Get route coordinates
+     * @returns {Array} Array of route coordinates
+     */
+    getRouteCoordinates() {
+        return this.routeCoordinates;
+    }
+
+    /**
+     * Force map refresh
+     */
     refresh() {
         if (this.map) {
             this.map.invalidateSize();

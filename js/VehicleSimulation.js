@@ -137,23 +137,45 @@ class VehicleSimulation {
             const currentPoint = this.dataManager.getRoutePoint(this.currentIndex);
             
             if (currentPoint) {
-                // Update vehicle position
-                this.mapManager.updateVehiclePosition(currentPoint.latitude, currentPoint.longitude);
-                
-                // Calculate distance traveled
-                if (this.currentIndex > 0) {
-                    const distance = this.dataManager.calculateDistanceBetweenPoints(
-                        this.currentIndex - 1, 
-                        this.currentIndex
-                    );
-                    this.totalDistance += distance;
+                // Get the exact route coordinates for this index
+                const routeCoordinates = this.mapManager.getRouteCoordinates();
+                if (routeCoordinates && routeCoordinates[this.currentIndex]) {
+                    const [exactLat, exactLng] = routeCoordinates[this.currentIndex];
+                    
+                    // Update vehicle position using exact route coordinates
+                    this.mapManager.updateVehiclePosition(exactLat, exactLng);
+                    
+                    // Calculate distance traveled using exact coordinates
+                    if (this.currentIndex > 0 && routeCoordinates[this.currentIndex - 1]) {
+                        const [prevLat, prevLng] = routeCoordinates[this.currentIndex - 1];
+                        const distance = Utils.calculateDistance(prevLat, prevLng, exactLat, exactLng);
+                        this.totalDistance += distance;
+                    }
+                    
+                    // Update info panel with exact coordinates
+                    this.updateInfoPanelWithExactCoords(exactLat, exactLng, currentPoint.timestamp);
+                    
+                    // Center map on vehicle
+                    this.mapManager.centerOnVehicle(exactLat, exactLng);
+                } else {
+                    // Fallback to original method
+                    this.mapManager.updateVehiclePosition(currentPoint.latitude, currentPoint.longitude);
+                    
+                    // Calculate distance traveled
+                    if (this.currentIndex > 0) {
+                        const distance = this.dataManager.calculateDistanceBetweenPoints(
+                            this.currentIndex - 1, 
+                            this.currentIndex
+                        );
+                        this.totalDistance += distance;
+                    }
+                    
+                    // Update info panel
+                    this.updateInfoPanel();
+                    
+                    // Center map on vehicle
+                    this.mapManager.centerOnVehicle(currentPoint.latitude, currentPoint.longitude);
                 }
-                
-                // Update info panel
-                this.updateInfoPanel();
-                
-                // Center map on vehicle
-                this.mapManager.centerOnVehicle(currentPoint.latitude, currentPoint.longitude);
                 
                 // Check if we've reached the end
                 if (this.currentIndex >= this.dataManager.getRouteLength() - 1) {
@@ -188,6 +210,34 @@ class VehicleSimulation {
         this.uiController.updateVehicleInfo({
             currentPosition: `${currentPoint.latitude.toFixed(6)}, ${currentPoint.longitude.toFixed(6)}`,
             timestamp: new Date(currentPoint.timestamp).toLocaleString(),
+            speed: speed,
+            distance: this.totalDistance
+        });
+    }
+
+    /**
+     * Update the information panel with exact coordinates
+     * @param {number} latitude - Exact latitude
+     * @param {number} longitude - Exact longitude
+     * @param {string} timestamp - Timestamp string
+     */
+    updateInfoPanelWithExactCoords(latitude, longitude, timestamp) {
+        // Calculate speed using exact coordinates
+        let speed = 0;
+        if (this.currentIndex > 0) {
+            const routeCoordinates = this.mapManager.getRouteCoordinates();
+            if (routeCoordinates && routeCoordinates[this.currentIndex - 1]) {
+                const [prevLat, prevLng] = routeCoordinates[this.currentIndex - 1];
+                const distance = Utils.calculateDistance(prevLat, prevLng, latitude, longitude);
+                const timeDiff = 5; // Assuming 5 seconds between points
+                speed = Utils.calculateSpeed(distance, timeDiff);
+            }
+        }
+
+        // Update UI with exact coordinates
+        this.uiController.updateVehicleInfo({
+            currentPosition: `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`,
+            timestamp: new Date(timestamp).toLocaleString(),
             speed: speed,
             distance: this.totalDistance
         });
