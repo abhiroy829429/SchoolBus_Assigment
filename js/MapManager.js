@@ -1,278 +1,165 @@
-
 class MapManager {
-    constructor() {
-        this.map = null;
+    constructor(mapId, vehicleSimulation) {
+        this.map = L.map(mapId).setView([17.3850, 78.4867], 13);
         this.vehicleMarker = null;
         this.routePolyline = null;
-        this.fallbackMarker = null;
-    }
+        this.originalRoute = [];
+        this.vehicleSimulation = vehicleSimulation;
 
-    /**
-     * Initialize the map
-     */
-    initialize() {
-        try {
-            Utils.log('Initializing map...');
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             
-            this.map = L.map('map').setView(
-                CONFIG.MAP.DEFAULT_CENTER, 
-                CONFIG.MAP.DEFAULT_ZOOM
-            );
-            Utils.log('Map created', this.map);
-            
-            // Add OpenStreetMap tiles
-            L.tileLayer(CONFIG.MAP.TILE_URL, CONFIG.MAP.TILE_OPTIONS).addTo(this.map);
-            Utils.log('Map tiles added successfully');
-            
-        } catch (error) {
-            Utils.logError('Error initializing map', error);
-            Utils.showError(`Map initialization failed: ${error.message}`);
-        }
-    }
+        }).addTo(this.map);
 
-    /**
-     * Create and add route polyline to map
-     * @param {Array} routeData - Array of route coordinates
-     */
-    createRoute(routeData) {
-        try {
-            Utils.log('Creating route with', routeData.length, 'points...');
-            
-            const routeCoordinates = routeData.map(point => [point.latitude, point.longitude]);
-            this.routePolyline = L.polyline(routeCoordinates, {
-                color: CONFIG.ROUTE.COLOR,
-                weight: CONFIG.ROUTE.WEIGHT,
-                opacity: CONFIG.ROUTE.OPACITY,
-                dashArray: CONFIG.ROUTE.DASH_ARRAY
-            }).addTo(this.map);
+        this.vehicleIcon = L.divIcon({
+            className: 'vehicle-icon',
+            html: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="30" height="30"><path d="M0 0h24v24H0z" fill="none"/><path fill="#ff7800" stroke="#000" stroke-width="0.5" d="M20 8h-3V4H7v4H4c-1.1 0-2 .9-2 2v8c0 1.1.9 2 2 2h1v1c0 .55.45 1 1 1s1-.45 1-1v-1h8v1c0 .55.45 1 1 1s1-.45 1-1v-1h1c1.1 0 2-.9 2-2v-8c0-1.1-.9-2-2-2zM7.5 16c-.83 0-1.5-.67-1.5-1.5S6.67 13 7.5 13s1.5.67 1.5 1.5S8.33 16 7.5 16zm9 0c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zM4 11h16v1H4v-1z"/></svg>',
+            iconSize: [30, 30],
+            iconAnchor: [15, 15]
+        });
 
-            // Fit map to show the entire route
-            this.map.fitBounds(this.routePolyline.getBounds(), { padding: [20, 20] });
-            Utils.log('Route created and map fitted to bounds');
-            
-            // Store route coordinates for vehicle positioning
-            this.routeCoordinates = routeCoordinates;
-            
-        } catch (error) {
-            Utils.logError('Error creating route', error);
-            Utils.showError(`Route creation failed: ${error.message}`);
-        }
-    }
-
-    /**
-     * Create vehicle icon
-     * @returns {L.DivIcon} Vehicle icon
-     */
-    createVehicleIcon() {
-        return L.divIcon({
-            className: CONFIG.VEHICLE_ICON.CLASS_NAME,
-            html: CONFIG.VEHICLE_ICON.HTML,
-            iconSize: CONFIG.VEHICLE_ICON.SIZE,
-            iconAnchor: CONFIG.VEHICLE_ICON.ANCHOR
+        this.vehicleSimulation.on('update', (state) => {
+            this.updateVehicleState(state);
         });
     }
 
-    /**
-     * Create fallback icon
-     * @returns {L.DivIcon} Fallback icon
-     */
-    createFallbackIcon() {
-        return L.divIcon({
-            className: CONFIG.FALLBACK_ICON.CLASS_NAME,
-            html: CONFIG.FALLBACK_ICON.HTML,
-            iconSize: CONFIG.FALLBACK_ICON.SIZE,
-            iconAnchor: CONFIG.FALLBACK_ICON.ANCHOR
-        });
-    }
-
-    /**
-     * Add vehicle marker to map
-     * @param {Object} startPoint - Starting coordinates
-     */
-    addVehicleMarker(startPoint) {
-        try {
-            const vehicleIcon = this.createVehicleIcon();
-            
-            // Use the first route coordinate to ensure perfect alignment
-            let startPosition = [startPoint.latitude, startPoint.longitude];
-            if (this.routeCoordinates && this.routeCoordinates.length > 0) {
-                startPosition = this.routeCoordinates[0];
-            }
-            
-            this.vehicleMarker = L.marker(startPosition, {
-                icon: vehicleIcon
-            }).addTo(this.map);
-
-            Utils.log('Vehicle marker created at:', startPosition);
-            Utils.log('Marker added to map:', this.map.hasLayer(this.vehicleMarker));
-            
-            // Add popup to vehicle marker
-            this.vehicleMarker.bindPopup(`
-                <div style="text-align: center;">
-                    <strong>🚌 Vehicle</strong><br>
-                    <small>Click for details</small>
-                </div>
-            `);
-
-            // Create fallback marker
-            this.fallbackMarker = L.marker([startPoint.latitude, startPoint.longitude], {
-                icon: this.createFallbackIcon()
-            });
-
-            // Check if custom icon is visible, if not use fallback
-            setTimeout(() => {
-                this.checkMarkerVisibility();
-            }, 1000);
-
-            // Test DOM element creation
-            setTimeout(() => {
-                this.testMarkerDOM();
-            }, 500);
-            
-        } catch (error) {
-            Utils.logError('Error adding vehicle marker', error);
-            Utils.showError(`Vehicle marker creation failed: ${error.message}`);
-        }
-    }
-
-    /**
-     * Check if vehicle marker is visible and switch to fallback if needed
-     */
-    checkMarkerVisibility() {
-        const customMarker = document.querySelector(`.${CONFIG.VEHICLE_ICON.CLASS_NAME}`);
-        Utils.log('Custom marker element:', customMarker);
-        
-        if (!customMarker || customMarker.offsetWidth === 0) {
-            Utils.log('Custom marker not visible, switching to fallback');
-            this.map.removeLayer(this.vehicleMarker);
-            this.vehicleMarker = this.fallbackMarker;
-            this.vehicleMarker.addTo(this.map);
-            Utils.log('Using fallback marker icon');
-        } else {
-            Utils.log('Custom marker is visible');
-        }
-    }
-
-    /**
-     * Test DOM element creation
-     */
-    testMarkerDOM() {
-        const markerElement = document.querySelector(`.${CONFIG.VEHICLE_ICON.CLASS_NAME}`);
-        Utils.log('DOM element found:', markerElement);
-        if (markerElement) {
-            Utils.log('Marker dimensions:', markerElement.offsetWidth, 'x', markerElement.offsetHeight);
-            Utils.log('Marker visible:', markerElement.offsetWidth > 0);
-        }
-    }
-
-    /**
-     * Update vehicle position
-     * @param {number} latitude - New latitude
-     * @param {number} longitude - New longitude
-     */
-    updateVehiclePosition(latitude, longitude) {
-        if (this.vehicleMarker) {
-            // Update vehicle marker position with smooth animation
-            this.vehicleMarker.setLatLng([latitude, longitude], {
-                animate: true,
-                duration: 0.5
-            });
-            
-            // Also update fallback marker if it exists
-            if (this.fallbackMarker) {
-                this.fallbackMarker.setLatLng([latitude, longitude]);
-            }
-        }
-    }
-
-    /**
-     * Get exact position on the route
-     * @param {number} latitude - Target latitude
-     * @param {number} longitude - Target longitude
-     * @returns {Array} Exact coordinates on the route
-     */
-    getExactRoutePosition(latitude, longitude) {
-        if (!this.routeCoordinates || this.routeCoordinates.length === 0) {
-            return [latitude, longitude];
-        }
-
-        // Find the closest point on the route
-        let closestPoint = this.routeCoordinates[0];
-        let minDistance = Infinity;
-
-        for (const coord of this.routeCoordinates) {
-            const distance = Math.sqrt(
-                Math.pow(coord[0] - latitude, 2) + 
-                Math.pow(coord[1] - longitude, 2)
-            );
-            
-            if (distance < minDistance) {
-                minDistance = distance;
-                closestPoint = coord;
-            }
-        }
-
-        return closestPoint;
-    }
-
-    /**
-     * Center map on vehicle
-     * @param {number} latitude - Vehicle latitude
-     * @param {number} longitude - Vehicle longitude
-     */
-    centerOnVehicle(latitude, longitude) {
-        this.map.panTo([latitude, longitude], {
-            animate: true,
-            duration: 0.5
-        });
-    }
-
-    /**
-     * Toggle route visibility
-     * @param {boolean} show - Whether to show the route
-     */
-    toggleRoute(show) {
+    drawRoute(route) {
+        this.originalRoute = route;
         if (this.routePolyline) {
-            if (show) {
-                this.routePolyline.addTo(this.map);
+            this.map.removeLayer(this.routePolyline);
+        }
+        this.routePolyline = L.polyline(route, { color: 'green', weight: 5 }).addTo(this.map);
+        this.map.fitBounds(this.routePolyline.getBounds());
+    }
+
+    reset(route) {
+        if (!route || route.length === 0) return;
+
+        if (this.vehicleMarker) {
+            this.map.removeLayer(this.vehicleMarker);
+        } else {
+              this.map.setView(route[0], 16);
+        }
+
+        this.createVehicleMarker(route[0]);
+        this.drawRoute(route);
+    }
+
+    createVehicleMarker(position) {
+        const vehicleIcon = L.divIcon({
+            html: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#ff7800" width="30px" height="30px"><path d="M0 0h24v24H0z" fill="none"/><path d="M20 8h-3V4H7v4H4c-1.1 0-2 .9-2 2v8c0 1.1.9 2 2 2h1v1c0 .55.45 1 1 1s1-.45 1-1v-1h8v1c0 .55.45 1 1 1s1-.45 1-1v-1h1c1.1 0 2-.9 2-2v-8c0-1.1-.9-2-2-2zM7.5 16c-.83 0-1.5-.67-1.5-1.5S6.67 13 7.5 13s1.5.67 1.5 1.5S8.33 16 7.5 16zm9 0c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zM4 11h16v1H4v-1z"/></svg>`,
+            className: 'vehicle-icon',
+            iconSize: [30, 30],
+            iconAnchor: [15, 15],
+        });
+
+        this.vehicleMarker = L.marker(position, { icon: vehicleIcon });
+        this.vehicleMarker.addTo(this.map);
+
+        if (!this.map.hasLayer(this.vehicleMarker)) {
+            this.vehicleMarker.addTo(this.map);
+            console.log('Marker re-added to map.');
+        }
+
+        const mapBounds = this.map.getBounds();
+        if (!mapBounds.contains(position)) {
+            console.warn('Marker position is outside of map bounds:', position);
+        }
+
+        if (!this.vehicleMarker) {
+            console.error('Failed to create vehicle marker.');
+        } else {
+            console.log('Vehicle marker created at:', this.vehicleMarker.getLatLng());
+        }
+
+        if (position.lat === 0 && position.lng === 0) {
+            console.error('Invalid position detected:', position);
+        }
+    }
+
+    updateVehicleState(state) {
+        try {
+            console.log('Updating vehicle state:', state);
+            // If marker doesn't exist or is not on the map, re-create it
+            let needsRecreate = false;
+            if (!this.vehicleMarker) {
+                needsRecreate = true;
             } else {
+                // Check if marker element is present in DOM (sometimes Leaflet removes it)
+                const iconElement = this.vehicleMarker.getElement();
+                if (!iconElement || !iconElement.parentNode) {
+                    // Remove reference and mark for recreation
+                    this.vehicleMarker = null;
+                    needsRecreate = true;
+                }
+            }
+            console.log('Current marker position:', this.vehicleMarker ? this.vehicleMarker.getLatLng() : 'No marker');
+            console.log('Marker needs recreation:', needsRecreate);
+            if (needsRecreate) {
+                this.createVehicleMarker(state.position);
+            }
+
+            const { position, bearing } = state;
+            this.vehicleMarker.setLatLng(position);
+
+            const iconEl = this.vehicleMarker.getElement();
+            if (iconEl) {
+                // IMPORTANT: Do NOT set transform on the marker container – Leaflet uses it for positioning.
+                const svg = iconEl.querySelector('svg');
+                if (svg) {
+                    svg.style.transform = `rotate(${bearing}deg)`;
+                }
+            }
+
+            this.updateRouteView(position);
+        } catch (err) {
+            console.error('Error updating vehicle state:', err);
+        }
+    }
+
+    updateRouteView(currentPosition) {
+        try {
+            if (!this.routePolyline || !this.originalRoute || this.originalRoute.length < 2) return;
+
+            const p = L.latLng(currentPosition.lat, currentPosition.lng);
+            const pts = this.originalRoute.map(r => L.latLng(r.lat, r.lng));
+
+            const map = this.map;
+            const dist2 = (a, b) => {
+                const pa = map.project(a, map.getZoom());
+                const pb = map.project(b, map.getZoom());
+                const dx = pa.x - pb.x; const dy = pa.y - pb.y;
+                return dx * dx + dy * dy;
+            };
+
+            let best = { idx: 0, t: 0, q: pts[0], d2: dist2(p, pts[0]) };
+            for (let i = 0; i < pts.length - 1; i++) {
+                const a = pts[i];
+                const b = pts[i + 1];
+                const pa = map.project(a, map.getZoom());
+                const pb = map.project(b, map.getZoom());
+                const pp = map.project(p, map.getZoom());
+                const abx = pb.x - pa.x, aby = pb.y - pa.y;
+                const apx = pp.x - pa.x, apy = pp.y - pa.y;
+                const ab2 = abx * abx + aby * aby;
+                const t = ab2 === 0 ? 0 : Math.max(0, Math.min(1, (apx * abx + apy * aby) / ab2));
+                const qx = pa.x + t * abx, qy = pa.y + t * aby;
+                const d2pq = (pp.x - qx) * (pp.x - qx) + (pp.y - qy) * (pp.y - qy);
+                if (d2pq <= best.d2) {
+                    const qLatLng = map.unproject(L.point(qx, qy), map.getZoom());
+                    best = { idx: i, t, q: qLatLng, d2: d2pq };
+                }
+            }
+
+            const remaining = [best.q];
+            for (let j = best.idx + 1; j < pts.length; j++) remaining.push(pts[j]);
+
+            if (remaining.length >= 2) {
+                this.routePolyline.setLatLngs(remaining);
+            } else if (this.map.hasLayer(this.routePolyline)) {
                 this.map.removeLayer(this.routePolyline);
             }
-        }
-    }
-
-    /**
-     * Reset vehicle to starting position
-     * @param {Object} startPoint - Starting coordinates
-     */
-    resetVehicle(startPoint) {
-        if (this.vehicleMarker && startPoint) {
-            const exactPosition = this.getExactRoutePosition(startPoint.latitude, startPoint.longitude);
-            this.vehicleMarker.setLatLng(exactPosition);
-            
-            if (this.fallbackMarker) {
-                this.fallbackMarker.setLatLng(exactPosition);
-            }
-        }
-    }
-
-    /**
-     * Get route coordinates
-     * @returns {Array} Array of route coordinates
-     */
-    getRouteCoordinates() {
-        return this.routeCoordinates;
-    }
-
-    /**
-     * Force map refresh
-     */
-    refresh() {
-        if (this.map) {
-            this.map.invalidateSize();
-            Utils.log('Map refreshed');
+        } catch (err) {
+            console.error('Error updating route view:', err);
         }
     }
 }
-
- 

@@ -8,7 +8,7 @@ const CONFIG = {
         DEFAULT_ZOOM: 15,
         TILE_URL: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
         TILE_OPTIONS: {
-            attribution: '© OpenStreetMap contributors',
+           
             maxZoom: 19
         }
     },

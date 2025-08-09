@@ -1,303 +1,179 @@
-// Main Vehicle Simulation Class
-// BLOCKLY TECHNOLOGIES PRIVATE LIMITED
-
 class VehicleSimulation {
-    constructor() {
-        this.currentIndex = 0;
-        this.isPlaying = false;
-        this.animationInterval = null;
-        this.animationSpeed = CONFIG.ANIMATION.DEFAULT_SPEED;
-        this.totalDistance = 0;
-        this.startTime = null;
-
-        // Initialize managers
-        this.mapManager = new MapManager();
-        this.dataManager = new DataManager();
-        this.uiController = new UIController(this);
-
-        // Initialize the application
-        this.initialize();
-    }
-
-    /**
-     * Initialize the simulation
-     */
-    async initialize() {
-        try {
-            // Show loading indicator
-            this.uiController.showLoadingIndicator();
-
-            // Initialize map
-            this.mapManager.initialize();
-
-            // Wait for map to be ready
-            await new Promise(resolve => setTimeout(resolve, 500));
-
-            // Load route data
-            const routeData = await this.dataManager.loadRouteData();
-
-            // Create route and vehicle marker
-            this.mapManager.createRoute(routeData);
-            this.mapManager.addVehicleMarker(this.dataManager.getStartPoint());
-
-            // Update UI with initial data
-            this.updateInfoPanel();
-
-            // Enable controls
-            this.uiController.enableControls();
-
-            // Hide loading indicator
-            setTimeout(() => {
-                this.uiController.hideLoadingIndicator();
-            }, 1000);
-
-        } catch (error) {
-            Utils.logError('Error initializing simulation', error);
-            this.uiController.showError(`Simulation initialization failed: ${error.message}`);
-            this.uiController.hideLoadingIndicator();
-        }
-    }
-
-    /**
-     * Toggle play/pause functionality
-     */
-    togglePlayPause() {
-        if (this.isPlaying) {
-            this.pauseSimulation();
+    constructor(route, onUpdate) {
+        if (!Array.isArray(route) || route.length < 2) {
+            console.error("Invalid route data provided to VehicleSimulation. Route must be an array with at least two points.");
+            this.route = [{ lat: 0, lng: 0 }, { lat: 0, lng: 0 }];
         } else {
-            this.startSimulation();
+            this.route = route;
+        }
+
+        this.onUpdate = onUpdate;
+        this.listeners = {};
+
+        this.speed = 1;
+        this.reset();
+    }
+
+    on(event, callback) {
+        if (!this.listeners[event]) {
+            this.listeners[event] = [];
+        }
+        this.listeners[event].push(callback);
+    }
+
+    off(event, callback) {
+        if (this.listeners[event]) {
+            this.listeners[event] = this.listeners[event].filter(cb => cb !== callback);
         }
     }
 
-    /**
-     * Start the simulation
-     */
-    startSimulation() {
-        if (this.currentIndex >= this.dataManager.getRouteLength() - 1) {
-            this.resetSimulation();
+    emit(event, data) {
+        console.log(`Emitting event: ${event}`, data);
+        if (this.listeners[event]) {
+            this.listeners[event].forEach(callback => callback(data));
         }
-        
-        this.isPlaying = true;
-        this.startTime = this.startTime || new Date();
-        
-        this.uiController.updatePlayPauseButton(true);
-        this.startAnimation();
+        if (this.onUpdate && event === 'update') {
+            this.onUpdate(data);
+        }
     }
 
-    /**
-     * Pause the simulation
-     */
-    pauseSimulation() {
-        this.isPlaying = false;
-        this.uiController.updatePlayPauseButton(false);
-        this.stopAnimation();
+    start() {
+        if (this.isMoving || this.isFinished()) return;
+        this.isMoving = true;
+        this.lastTimestamp = performance.now();
+        this.animationFrameId = requestAnimationFrame(() => this.animate());
     }
 
-    /**
-     * Reset the simulation
-     */
-    resetSimulation() {
-        this.pauseSimulation();
+    pause() {
+        this.isMoving = false;
+        if (this.animationFrameId) {
+            cancelAnimationFrame(this.animationFrameId);
+            this.animationFrameId = null;
+        }
+    }
+
+    reset() {
+        this.pause();
         this.currentIndex = 0;
-        this.totalDistance = 0;
-        this.startTime = null;
-        
-        const startPoint = this.dataManager.getStartPoint();
-        if (startPoint) {
-            this.mapManager.resetVehicle(startPoint);
-            this.updateInfoPanel();
+        this.distanceAlongSegment = 0;
+        this.distanceTraveled = 0;
+        this.currentPosition = this.route[0] || { lat: 0, lng: 0 };
+        this.bearing = this.calculateBearing(this.route[0], this.route[1]);
+        this.emit('update', this.getState());
+    }
+
+    setSpeed(speedMultiplier) {
+        this.speed = speedMultiplier;
+    }
+
+    isFinished() {
+        return this.currentIndex >= this.route.length - 1;
+    }
+
+    animate() {
+        if (!this.isMoving) return;
+
+        const now = performance.now();
+        const delta = (now - this.lastTimestamp) / 1000;
+        this.lastTimestamp = now;
+
+        this.updatePosition(delta);
+
+        if (!this.isFinished()) {
+            this.animationFrameId = requestAnimationFrame(() => this.animate());
+        } else {
+            this.pause();
         }
     }
 
-    /**
-     * Start the animation loop
-     */
-    startAnimation() {
-        this.animationInterval = setInterval(() => {
-            this.moveToNextPoint();
-        }, this.animationSpeed);
-    }
+    updatePosition(delta) {
+        if (this.isFinished()) return;
 
-    /**
-     * Stop the animation loop
-     */
-    stopAnimation() {
-        if (this.animationInterval) {
-            clearInterval(this.animationInterval);
-            this.animationInterval = null;
-        }
-    }
+        const baseSpeed = 10;
+        let distanceToMove = this.speed * baseSpeed * delta;
 
-    /**
-     * Move to the next point in the route
-     */
-    moveToNextPoint() {
-        if (this.currentIndex < this.dataManager.getRouteLength() - 1) {
+        this.distanceTraveled += distanceToMove;
+        this.distanceAlongSegment += distanceToMove;
+
+        let segmentStart = this.route[this.currentIndex];
+        let segmentEnd = this.route[this.currentIndex + 1];
+        let segmentLength = this.haversine(segmentStart, segmentEnd);
+
+        while (segmentLength === 0 && !this.isFinished()) {
             this.currentIndex++;
-            const currentPoint = this.dataManager.getRoutePoint(this.currentIndex);
-            
-            if (currentPoint) {
-                // Get the exact route coordinates for this index
-                const routeCoordinates = this.mapManager.getRouteCoordinates();
-                if (routeCoordinates && routeCoordinates[this.currentIndex]) {
-                    const [exactLat, exactLng] = routeCoordinates[this.currentIndex];
-                    
-                    // Update vehicle position using exact route coordinates
-                    this.mapManager.updateVehiclePosition(exactLat, exactLng);
-                    
-                    // Calculate distance traveled using exact coordinates
-                    if (this.currentIndex > 0 && routeCoordinates[this.currentIndex - 1]) {
-                        const [prevLat, prevLng] = routeCoordinates[this.currentIndex - 1];
-                        const distance = Utils.calculateDistance(prevLat, prevLng, exactLat, exactLng);
-                        this.totalDistance += distance;
-                    }
-                    
-                    // Update info panel with exact coordinates
-                    this.updateInfoPanelWithExactCoords(exactLat, exactLng, currentPoint.timestamp);
-                    
-                    // Center map on vehicle
-                    this.mapManager.centerOnVehicle(exactLat, exactLng);
-                } else {
-                    // Fallback to original method
-                    this.mapManager.updateVehiclePosition(currentPoint.latitude, currentPoint.longitude);
-                    
-                    // Calculate distance traveled
-                    if (this.currentIndex > 0) {
-                        const distance = this.dataManager.calculateDistanceBetweenPoints(
-                            this.currentIndex - 1, 
-                            this.currentIndex
-                        );
-                        this.totalDistance += distance;
-                    }
-                    
-                    // Update info panel
-                    this.updateInfoPanel();
-                    
-                    // Center map on vehicle
-                    this.mapManager.centerOnVehicle(currentPoint.latitude, currentPoint.longitude);
-                }
-                
-                // Check if we've reached the end
-                if (this.currentIndex >= this.dataManager.getRouteLength() - 1) {
-                    this.pauseSimulation();
-                    this.showCompletionMessage();
-                }
+            if (this.isFinished()) {
+                this.currentPosition = this.route[this.route.length - 1];
+                this.emit('update', this.getState());
+                return;
             }
-        }
-    }
-
-    /**
-     * Update the information panel
-     */
-    updateInfoPanel() {
-        const currentPoint = this.dataManager.getRoutePoint(this.currentIndex);
-        
-        if (!currentPoint) {
-            this.uiController.resetVehicleInfo();
-            return;
+            segmentStart = this.route[this.currentIndex];
+            segmentEnd = this.route[this.currentIndex + 1];
+            segmentLength = this.haversine(segmentStart, segmentEnd);
         }
 
-        // Calculate speed
-        let speed = 0;
-        if (this.currentIndex > 0) {
-            speed = this.dataManager.calculateSpeedBetweenPoints(
-                this.currentIndex - 1, 
-                this.currentIndex
-            );
-        }
+        while (this.distanceAlongSegment >= segmentLength && !this.isFinished()) {
+            this.distanceAlongSegment -= segmentLength;
+            this.currentIndex++;
 
-        // Update UI
-        this.uiController.updateVehicleInfo({
-            currentPosition: `${currentPoint.latitude.toFixed(6)}, ${currentPoint.longitude.toFixed(6)}`,
-            timestamp: new Date(currentPoint.timestamp).toLocaleString(),
-            speed: speed,
-            distance: this.totalDistance
-        });
-    }
-
-    /**
-     * Update the information panel with exact coordinates
-     * @param {number} latitude - Exact latitude
-     * @param {number} longitude - Exact longitude
-     * @param {string} timestamp - Timestamp string
-     */
-    updateInfoPanelWithExactCoords(latitude, longitude, timestamp) {
-        // Calculate speed using exact coordinates
-        let speed = 0;
-        if (this.currentIndex > 0) {
-            const routeCoordinates = this.mapManager.getRouteCoordinates();
-            if (routeCoordinates && routeCoordinates[this.currentIndex - 1]) {
-                const [prevLat, prevLng] = routeCoordinates[this.currentIndex - 1];
-                const distance = Utils.calculateDistance(prevLat, prevLng, latitude, longitude);
-                const timeDiff = 5; // Assuming 5 seconds between points
-                speed = Utils.calculateSpeed(distance, timeDiff);
+            if (this.isFinished()) {
+                this.currentPosition = this.route[this.route.length - 1];
+                this.distanceAlongSegment = 0;
+                this.emit('update', this.getState());
+                return;
             }
+
+            segmentStart = this.route[this.currentIndex];
+            segmentEnd = this.route[this.currentIndex + 1];
+            segmentLength = this.haversine(segmentStart, segmentEnd);
         }
 
-        // Update UI with exact coordinates
-        this.uiController.updateVehicleInfo({
-            currentPosition: `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`,
-            timestamp: new Date(timestamp).toLocaleString(),
-            speed: speed,
-            distance: this.totalDistance
-        });
+        const fraction = segmentLength > 0 ? (this.distanceAlongSegment / segmentLength) : 1;
+        this.currentPosition = {
+            lat: segmentStart.lat + (segmentEnd.lat - segmentStart.lat) * fraction,
+            lng: segmentStart.lng + (segmentEnd.lng - segmentStart.lng) * fraction
+        };
+
+        this.bearing = this.calculateBearing(segmentStart, segmentEnd);
+
+        this.emit('update', this.getState());
     }
 
-    /**
-     * Set animation speed
-     * @param {number} speed - Animation speed in milliseconds
-     */
-    setAnimationSpeed(speed) {
-        this.animationSpeed = speed;
-        
-        // Restart animation with new speed if currently playing
-        if (this.isPlaying) {
-            this.stopAnimation();
-            this.startAnimation();
-        }
-    }
-
-    /**
-     * Toggle route visibility
-     * @param {boolean} show - Whether to show the route
-     */
-    toggleRoute(show) {
-        this.mapManager.toggleRoute(show);
-    }
-
-    /**
-     * Show completion message
-     */
-    showCompletionMessage() {
-        const duration = this.calculateDuration();
-        this.uiController.showCompletionMessage(this.totalDistance, duration);
-    }
-
-    /**
-     * Calculate total duration
-     * @returns {string} Formatted duration
-     */
-    calculateDuration() {
-        if (!this.startTime) return '0:00';
-        
-        const endTime = new Date();
-        const duration = Math.floor((endTime - this.startTime) / 1000); // seconds
-        return Utils.formatDuration(duration);
-    }
-
-    /**
-     * Get current simulation state
-     * @returns {Object} Current state
-     */
     getState() {
         return {
-            isPlaying: this.isPlaying,
-            currentIndex: this.currentIndex,
-            totalDistance: this.totalDistance,
-            animationSpeed: this.animationSpeed,
-            startTime: this.startTime
+            position: this.currentPosition,
+            bearing: this.bearing,
+            speedKmh: this.speed * 10 * 3.6,
+            distanceTraveled: this.distanceTraveled / 1000
         };
     }
-}
 
- 
+    haversine(p1, p2) {
+        if (!p1 || !p2) return 0;
+        const R = 6371e3;
+        const φ1 = p1.lat * Math.PI / 180;
+        const φ2 = p2.lat * Math.PI / 180;
+        const Δφ = (p2.lat - p1.lat) * Math.PI / 180;
+        const Δλ = (p2.lng - p1.lng) * Math.PI / 180;
+
+        const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+                  Math.cos(φ1) * Math.cos(φ2) *
+                  Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+        return R * c;
+    }
+
+    calculateBearing(p1, p2) {
+        if (!p1 || !p2) return 0;
+        const φ1 = p1.lat * Math.PI / 180;
+        const φ2 = p2.lat * Math.PI / 180;
+        const λ1 = p1.lng * Math.PI / 180;
+        const λ2 = p2.lng * Math.PI / 180;
+
+        const y = Math.sin(λ2 - λ1) * Math.cos(φ2);
+        const x = Math.cos(φ1) * Math.sin(φ2) -
+                  Math.sin(φ1) * Math.cos(φ2) * Math.cos(λ2 - λ1);
+        const θ = Math.atan2(y, x);
+        return (θ * 180 / Math.PI + 360) % 360; // in degrees
+    }
+}

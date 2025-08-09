@@ -3,102 +3,59 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Vehicle Movement Simulation - BLOCKLY Technologies</title>
-    
-    <!-- Leaflet CSS -->
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    
-    <!-- Custom CSS -->
+    <title>Vehicle Movement Simulation</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.3/dist/leaflet.css"/>
     <link rel="stylesheet" href="styles.css">
-    
-    <!-- Font Awesome for icons -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css">
 </head>
 <body>
     <div class="container">
-        <!-- Header -->
-        <header class="header">
-            <div class="header-content">
-                <div class="company-info">
-                    <h1><i class="fas fa-bus"></i> Vehicle Movement Simulation</h1>
-                    
-                </div>
-                <div class="controls">
-                    <button id="playPauseBtn" class="control-btn">
-                        <i class="fas fa-play"></i> Play
-                    </button>
-                    <button id="resetBtn" class="control-btn">
-                        <i class="fas fa-redo"></i> Reset
-                    </button>
-                </div>
-            </div>
+        <header>
+            <h1><i class="fas fa-bus"></i> Vehicle Movement Simulation</h1>
         </header>
-
-        <!-- Main Content -->
-        <main class="main-content">
-            <!-- Map Container -->
-            <div class="map-container">
-                <div id="map"></div>
-            </div>
-
-            <!-- Info Panel -->
-            <div class="info-panel">
+        <main>
+            <div id="map"></div>
+            <div class="sidebar">
+                <div class="controls-card">
+                    <h2><i class="fas fa-cog"></i> Controls</h2>
+                    <div class="control-buttons">
+                        <button id="playPauseBtn" type="button" class="btn-control play">▶️ Play</button>
+                        <button id="resetBtn" type="button" class="btn-control reset">🔄 Reset</button>
+                    </div>
+                </div>
                 <div class="info-card">
                     <h3><i class="fas fa-info-circle"></i> Vehicle Information</h3>
-                    <div class="info-item">
-                        <span class="label">Current Position:</span>
-                        <span id="currentPosition">--</span>
-                    </div>
-                    <div class="info-item">
-                        <span class="label">Timestamp:</span>
-                        <span id="timestamp">--</span>
-                    </div>
-                    <div class="info-item">
-                        <span class="label">Speed:</span>
-                        <span id="speed">--</span>
-                    </div>
-                    <div class="info-item">
-                        <span class="label">Distance Traveled:</span>
-                        <span id="distance">--</span>
-                    </div>
+                    <ul class="info-list">
+                        <li><strong>Current Position:</strong> <span id="currentPosition">-</span></li>
+                        <li><strong>Timestamp:</strong> <span id="timestamp">-</span></li>
+                        <li><strong>Speed:</strong> <span id="speed">-</span></li>
+                        <li><strong>Distance Traveled:</strong> <span id="distanceTraveled">-</span></li>
+                    </ul>
                 </div>
-
-                <div class="info-card">
-                    <h3><i class="fas fa-cog"></i> Simulation Settings</h3>
+                <div class="settings-card">
+                    <h3><i class="fas fa-sliders-h"></i> Simulation Settings</h3>
                     <div class="setting-item">
-                        <label for="speedSlider">Animation Speed:</label>
-                        <input type="range" id="speedSlider" min="500" max="3000" value="1000" step="100">
-                        <span id="speedValue">1s</span>
+                        <label for="speedSlider">Animation Speed: <span id="speedValue">1x</span></label>
+                        <input type="range" id="speedSlider" min="1" max="10" step="1" value="1">
                     </div>
                     <div class="setting-item">
-                        <label for="showRoute">Show Route:</label>
-                        <input type="checkbox" id="showRoute" checked>
+                        <label>
+                            <input type="checkbox" id="showRouteCheckbox" checked>
+                            Show Route
+                        </label>
                     </div>
                 </div>
             </div>
         </main>
-
-        <!-- Footer -->
-        <footer class="footer">
-            <p>&copy; 2024 BLOCKLY TECHNOLOGIES PRIVATE LIMITED | CIN: U62099MH2024PTC419161</p>
-            <p><i class="fas fa-map-marker-alt"></i> A22 NEW PANCHGANGA HSG.SO, VIJAY NAGAR, DEOLALI CAMP, NASHIK-422001, MAHARASHTRA</p>
-        </footer>
     </div>
 
-    <!-- Leaflet JS -->
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    
-    <!-- Configuration and Utilities -->
-    <script src="js/config.js"></script>
-    <script src="js/utils.js"></script>
-    
-    <!-- Core Modules -->
-    <script src="js/MapManager.js"></script>
-    <script src="js/DataManager.js"></script>
-    <script src="js/UIController.js"></script>
+    <!-- Libraries -->
+    <script src="https://unpkg.com/leaflet@1.9.3/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet-geometryutil@0.9.3/src/leaflet.geometryutil.js"></script>
+
+    <!-- App Scripts -->
     <script src="js/VehicleSimulation.js"></script>
-    
-    <!-- Main Application -->
+    <script src="js/MapManager.js"></script>
     <script src="js/main.js"></script>
 </body>
-</html> 
+</html>
